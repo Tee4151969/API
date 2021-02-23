@@ -4,6 +4,8 @@ import time
 from datetime import datetime
 import pyodbc as im
 import numpy as np
+import requests
+import sys,os
 app = Flask(__name__)
 @app.route('/')
 def index():
@@ -277,15 +279,6 @@ def get_hadoop_listcolumn(table):
             iseq += 1
             cname = c[0]
             type = c[1]
-            if (str(type).lower().find("string")>-1 or str(type).lower().find("varchar")>-1):
-                sqlmaxlength = "select max(length({column})) as max_length from {table}".format(column = cname , table = tablespecific)
-                cursormax = connection.cursor()
-                cursormax.execute(sqlmaxlength)
-                resultmax = cursormax.fetchone()
-
-                if resultmax:
-                    maxtext = resultmax[0]
-                    type = "varchar({ml})".format(ml=maxtext)
 
             if (columnname!=""):
                 columnname +="\n,"
@@ -364,21 +357,146 @@ def get_hadoop_listcolumntype(table):
 
 @app.route('/query/<filename>', methods=['GET'])
 def get_query(filename):
+    result  = []
     query = ""
-    nowstart = datetime.now()
-    nowstartstr = nowstart.strftime('%Y-%m-%dT%H:%M:%S') + ('-%02d' % (nowstart.microsecond / 10000))
-    sjobname = "query-" + filename
-    t0 = time.time()
-    fh = open(filename, 'r', encoding='utf-8')
-    query = fh.read()
-    print(nowstartstr + "=" + sjobname + " \n query =" + query)
-    fh.close()
-    connect = im.connect('DSN=Implala', autocommit=True)
-    df = pandas.read_sql(query, connect)
-    print(df)
-    result = df.to_json(orient="index")
-    parsed = json.loads(result)
-    print(f"elapsed time {(time.time() - t0):0.1f} seconds")
-    return json.dumps(parsed, indent=4, ensure_ascii=False).encode('utf8')
+    formatpath = "{dir}\{file}"
+    fullpath = ""
+    value =""
+    path = os.path.dirname(sys.argv[0])
+    fullpath = formatpath.format(dir=path,file=filename)
+    print(fullpath)
+    if os.path.exists(fullpath):
+        nowstart = datetime.now()
+        nowstartstr = nowstart.strftime('%Y-%m-%dT%H:%M:%S') + ('-%02d' % (nowstart.microsecond / 10000))
+        sjobname = "query-" + filename
+        t0 = time.time()
+        fh = open(fullpath, 'r', encoding='utf-8')
+        query = fh.read()
+        print(nowstartstr + "=" + sjobname + " \n query =" + query)
+        fh.close()
+        connect = im.connect('DSN=Implala', autocommit=True)
+        df = pandas.read_sql(query, connect)
+        for i in df.index:
+            data = {}
+            for j in df.columns:
+                value = df[j][i]
+                data[j] = str(value)
+                result.append(data)
 
+        print(f"elapsed time {(time.time() - t0):0.1f} seconds")
+        return json.dumps(result, indent=4, ensure_ascii=False).encode('utf8')
+    else:
+        return "file not found"
+
+@app.route('/fuzzy_ai/<thaiid>', methods=['GET'])
+def set_fuzzy_by_thai(thaiid):
+
+    partial = 0
+    ratio = 0
+    token = 0
+    iloop = 0
+    irow = 0
+
+    i70 = 0
+    i80 = 0
+    i90 = 0
+    ilow  = 0
+    arrAddrKeySortAsc = []
+    arrAddrKeySortDesc = []
+
+    sql = " select  t.match_key from adhcisrep.tee_ww_prod_key_before t"
+    sql += " where t.idnt_nbr = '{idnt_nbr}'"
+
+    key1 = ""
+    key2 = ""
+    key3 = ""
+    urlformat = "http://winthehouse.dwh-journey.arctic.true.th/fuzzy_compare/{compare}"
+    findcompare = ""
+
+    sTableQueryInsert = " INSERT into adhcisrep.tee_ww_prod_key_manual(idnt_nbr,source_addr_key,target_addr_key,partial_score,ratio_score,token_score,ppn_tm) VALUES "
+    sIns = ""
+    try:
+        connection = im.connect('DSN=Implala', autocommit=True)
+        print(connection)
+        t0 = time.time()
+        now = datetime.now()
+        nowts = now.strftime('%Y-%m-%dT%H:%M:%S') + ('-%02d' % (now.microsecond / 10000))
+        print(nowts + '============= start process  query ============= ')
+
+        dsExeCursor = connection.cursor()
+
+        dsCursor = connection.cursor()
+        dsCursor.execute(sql.format(idnt_nbr=thaiid))
+        print(sql.format(idnt_nbr=thaiid))
+        result = dsCursor.fetchall()
+        print(len(result))
+        if len(result) > 0:
+            sIns = ""
+            arrAddrKeySortAsc = []
+            arrAddrKeySortDesc = []
+            for row in result:
+                match_key = row[0]
+
+                arrAddrKeySortAsc.append(match_key)
+                arrAddrKeySortDesc.append(match_key)
+
+        arrAddrKeySortAsc = list(dict.fromkeys(arrAddrKeySortAsc))
+        arrAddrKeySortDesc = list(dict.fromkeys(arrAddrKeySortDesc))
+        arrAddrKeySortAsc.sort()
+        arrAddrKeySortDesc.sort(reverse=True)
+        if (arrAddrKeySortAsc != None and arrAddrKeySortDesc != None):
+            arrAddrCompare = []
+            for itemasc in arrAddrKeySortAsc:
+                key1 = itemasc
+                for itemdesc in arrAddrKeySortDesc:
+                    key2 = itemdesc
+                    if (key1 != key2):
+                        findcompare = key1 + "-" + key2
+                        url = (urlformat.format(compare=findcompare))
+                        print(url)
+                        try:
+                            response = json.loads(requests.get(url).text)
+                        except:
+                            response = None
+                        if (response):
+                            partial = (response['partial'])
+                            ratio = (response['ratio'])
+                            token = (response['token'])
+                            compare = {"souce": key1, "target": key2, "ratio": ratio, "partial": partial,
+                                       "token": token}
+
+                        arrAddrCompare.append(compare)
+                        iloop += 1
+                        if (ratio >69 or partial >69 or token >69):
+                            i70 +=1
+                        elif (ratio >79 or partial >79 or token >79):
+                            i80 += 1
+                        elif (ratio >89 or partial >89 or token >89):
+                            i90 += 1
+                        else:
+                            ilow +=1
+
+                        if sIns != "":
+                            sIns += ","
+                        sIns += " ('" + thaiid + "', '" + key1 + "', '" + key2 + "', " + str(partial) + ", " + str(ratio) + ", " + str(token) + ",now()) "
+
+                        fromatcounter = "Thai ID = {0} Qty , Loop = {1} Qty "
+                        print(fromatcounter.format(str(thaiid), str(iloop)))
+
+                        if (sIns != ""):
+                            dsExeCursor.execute(sTableQueryInsert + sIns)
+        #return json.dumps({'status': 'OK' ,'record' : str(iloop),'0-69' : str(ilow) ,'70-79' : str(i70) ,'80-89' : str(i80) ,'90-99' : str(i90)})
+        return json.dumps({'status': 'OK' ,'record' : str(iloop),'table' : 'adhcisrep.tee_ww_prod_key_manual'})
+    except Exception as e:
+        print('Error! Code: {c}, Message, {m}'.format(c=type(e).__name__, m=str(e)))
+    finally:
+        djobtime = datetime.today()
+        jobtime = djobtime.strftime('%d/%m/%Y %H:%M:%S')
+        if connection: connection.close()
+
+
+@app.route('/querytest', methods=['GET'])
+def get_query_test():
+     return json.dumps({'status':'OK'})
+# host='0.0.0.0','172.19.234.74'
 app.run(debug=True,port=5000)

@@ -775,5 +775,27 @@ def get_fuzzy_score(param):
     else:
         return get_fuzzy_province_postcode(param)
 
+@app.route('/fuzzy_compare/<param>', methods=['GET'])
+def get_fuzzy_compare(param):
+    ratio = 0
+    partial = 0
+    token = 0
+    source_compare = ''
+    target_compare = ''
+    data = {'fuzzy-source': source_compare, 'fuzzy-target': target_compare, 'ratio': ratio, 'partial': partial,
+            'token': token}
+    arrCompare = param.split("-")
+    print(len(arrCompare))
+    if len(arrCompare) == 2:
+        source_compare=arrCompare[0]
+        target_compare=arrCompare[1]
 
+        print(source_compare)
+        print(target_compare)
+        ratio = fuzz.ratio(source_compare, target_compare)
+        partial = fuzz.partial_ratio(source_compare, target_compare)
+        token = fuzz.token_set_ratio(source_compare, target_compare)
+        data = {'fuzzy-source': source_compare,'fuzzy-target': target_compare, 'ratio': ratio , 'partial': partial ,'token' : token}
+
+    return json.dumps(data)
 app.run(debug=True, host='0.0.0.0', port=80)
