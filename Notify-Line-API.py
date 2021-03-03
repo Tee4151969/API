@@ -2,7 +2,9 @@ from flask import Flask, json
 from datetime import datetime
 from PIL import Image
 from PIL import ImageDraw
+from cryptography.fernet import Fernet, InvalidToken
 import os
+import urllib.parse
 import requests
 app = Flask(__name__)
 URLLine = 'https://notify-api.line.me/api/notify'
@@ -28,16 +30,39 @@ def send_message(token, msg, img=None):
         files['imageFile'].close()
     return r.status_code
 
+def decryption(key : None , param : None):
+    cipher_suite = None
+    try:
+        f = Fernet(key)
+    except InvalidToken:
+        f = None
+    if not f is None:
+        try:
+            decrypted_bytes = f.decrypt(param.encode("utf-8"))
+        except InvalidToken:
+            decrypted_bytes = None  # TODO(kmullins): Shall we log this case? Is it expected?
+        if not decrypted_bytes is None:
+            decrypted_string = decrypted_bytes.decode()  # bytes -> str
+        else:
+            decrypted_string = "encryption is not support"
+    else:
+        key = "key is not support"
+    return decrypted_string
+
 @app.route('/line/message/<token>/<ciphertext>', methods=['GET'])
 def send_message(token=None,ciphertext=None):
     msg = ""
+    """
     html = requests.get(URLPdpa.format(keyAPI,ciphertext))
     result = dict(json.loads(html.text))
     print(result["key"])
     print(result["value"])
     if result["value_cipher"] != None:
         msg = (result["value_cipher"])
-
+    """
+    token = decryption(keyAPI, token)
+    print(token)
+    msg = decryption(keyAPI, ciphertext)
     headers = {'Authorization': 'Bearer ' + token}
     payload = {'message': msg}  # ,'stickerPackageId':1,'stickerId':1
     r = requests.post(URLLine, headers=headers, params=payload)
@@ -78,6 +103,8 @@ def send_image_list(token=None,ciphertext=None):
     MONITOR_STARTDATE_VALUE = ""
     MONITOR_ENDDATE_VALUE = ""
     msg = ""
+    """
+    keyAPI = "tt8NBFOcaq4_3ye-nzda888QrlqQCer9XXAlemoNX9c="
     print(URLPdpa.format(keyAPI, ciphertext))
 
     html = requests.get(URLPdpa.format(keyAPI, ciphertext))
@@ -86,6 +113,19 @@ def send_image_list(token=None,ciphertext=None):
     print(result["value"])
     if result["value_cipher"] != None:
         msg = (result["value_cipher"])
+    """
+
+    tokenurltotext = urllib.parse.unquote(token)
+    print(token)
+    print(tokenurltotext)
+    token = decryption(keyAPI, tokenurltotext)
+    print(token)
+
+    urltotext = urllib.parse.unquote(ciphertext)
+    print(ciphertext)
+    print(urltotext)
+    msg = decryption(keyAPI, urltotext)
+    print(msg)
     filebg = 'notify.png'
     filealert = 'notify_alert.png'
     arrMonitor=(msg).split("*")
@@ -146,6 +186,7 @@ def send_image_single(token=None,  ciphertext=None):
     row60 = 60
     row80 = 80
     row100 = 100
+    row120 = 120
 
     column40 = 40
     column50 = 50
@@ -169,13 +210,28 @@ def send_image_single(token=None,  ciphertext=None):
     time_used = ""
     t0 = ""
     t1 = ""
+    qty = ""
     msg = ""
+    """
+    keyAPI = "tt8NBFOcaq4_3ye-nzda888QrlqQCer9XXAlemoNX9c="
     html = requests.get(URLPdpa.format(keyAPI, ciphertext))
     result = dict(json.loads(html.text))
     print(result["key"])
     print(result["value"])
     if result["value_cipher"] != None:
         msg = (result["value_cipher"])
+    """
+    tokenurltotext = urllib.parse.unquote(token)
+    print(token)
+    print(tokenurltotext)
+    token = decryption(keyAPI, tokenurltotext)
+    print(token)
+
+    urltotext = urllib.parse.unquote(ciphertext)
+    print(ciphertext)
+    print(urltotext)
+    msg = decryption(keyAPI, urltotext)
+    print(msg)
     filebg = 'notify_single.png'
     filealert = 'notify_single_alert.png'
 
@@ -189,6 +245,7 @@ def send_image_single(token=None,  ciphertext=None):
         if len(arrMonitor) > 4: time_used = arrMonitor[4]
         if len(arrMonitor) > 5: t0 = arrMonitor[5]
         if len(arrMonitor) > 6: t1 = arrMonitor[6]
+        if len(arrMonitor) > 7: qty = arrMonitor[7]
         """
         group = "OMX"
         source = "OMX_NOTIFICATION_LOG"
@@ -202,15 +259,18 @@ def send_image_single(token=None,  ciphertext=None):
 
         I1.text((column20, row15), "Notice ", fill=(0, 0, 0))
         I1.text((column85, row30), str(datetime.now()), fill=(0, 0, 0))
-
-        I1.text((column50, row60), "Group ", fill=(0, 0, 0))
-        I1.text((column100, row60), group, fill=(128, 128, 128))
-
-        I1.text((column50, row80), "Source ", fill=(0, 0, 0))
-        I1.text((column100, row80), source, fill=(128, 128, 128))
-
-        I1.text((column50, row100), "Target ", fill=(0, 0, 0))
-        I1.text((column100, row100), target, fill=(128, 128, 128))
+        if (group != ""):
+            I1.text((column50, row60), "Group ", fill=(0, 0, 0))
+            I1.text((column100, row60), group, fill=(128, 128, 128))
+        if (source != ""):
+            I1.text((column50, row80), "Source ", fill=(0, 0, 0))
+            I1.text((column100, row80), source, fill=(128, 128, 128))
+        if (target != ""):
+            I1.text((column50, row100), "Target ", fill=(0, 0, 0))
+            I1.text((column100, row100), target, fill=(128, 128, 128))
+        if (qty != ""):
+            I1.text((column50, row120), "Qty ", fill=(0, 0, 0))
+            I1.text((column100, row120), qty, fill=(128, 128, 128))
 
         if (process != None):
             I1.text((column40, row140), str.format("{0} ({1})", process, time_used), fill=(128, 128, 128))
@@ -251,7 +311,7 @@ def send_image_single_list(token=None,ciphertext=None):
     column85 = 85
     column100 = 100
     column120 = 120
-
+    column150 = 150
 
 
     fontRed = (255, 0, 0)
@@ -265,16 +325,31 @@ def send_image_single_list(token=None,ciphertext=None):
     notify = "* Warning Delay time 2 Hour"
     key = ""
     value = ""
+    desc = ""
     listRecord = ""
     process = ""
     time_used = ""
     t0 = ""
     t1 = ""
     msg = ""
+    """
+    keyAPI = "tt8NBFOcaq4_3ye-nzda888QrlqQCer9XXAlemoNX9c="
     html = requests.get(URLPdpa.format(keyAPI, ciphertext))
     result = dict(json.loads(html.text))
     if result["value_cipher"] != None:
         msg = (result["value_cipher"])
+    """
+    tokenurltotext = urllib.parse.unquote(token)
+    print(token)
+    print(tokenurltotext)
+    token = decryption(keyAPI, tokenurltotext)
+    print(token)
+
+    urltotext = urllib.parse.unquote(ciphertext)
+    print(ciphertext)
+    print(urltotext)
+    msg = decryption(keyAPI, urltotext)
+    print(msg)
     filebg = 'notify_single.png'
     filealert = 'notify_single_list_alert.png'
     arrMonitor = (msg).split("*")
@@ -301,17 +376,20 @@ def send_image_single_list(token=None,ciphertext=None):
                 print(item)
                 arrKeyValue = item.split(",")
                 if len(arrKeyValue)>0:
-                    I1.text((column50, row80), "Key", fill=(0, 0, 0))
-                    I1.text((column120, row80), "Value", fill=(0, 0, 0))
+                    if len(arrKeyValue)>0:I1.text((column50, row80), "Key", fill=(0, 0, 0))
+                    if len(arrKeyValue)>1:I1.text((column120, row80), "Value", fill=(0, 0, 0))
+                    if len(arrKeyValue)>2:I1.text((column150, row80), "Desc", fill=(0, 0, 0))
 
                 if len(arrKeyValue)>0:key=arrKeyValue[0]
                 if len(arrKeyValue)>1:value=arrKeyValue[1]
+                if len(arrKeyValue)>2:desc=arrKeyValue[2]
 
-                I1.text((column50, row100), key, fill=(128, 128, 128))
-                I1.text((column120, row100), value, fill=(128, 128, 128))
+                if len(arrKeyValue)>0:I1.text((column50, row100), key, fill=(128, 128, 128))
+                if len(arrKeyValue)>1:I1.text((column120, row100), value, fill=(128, 128, 128))
+                if len(arrKeyValue)>2:I1.text((column150, row100), value, fill=(128, 128, 128))
                 row100 += rowSpace
         img.save(filealert)
-
+        print(token)
         if os.path.exists(filealert):
             if (token != ""):
                 formatmessage = "alert time : {0}"
@@ -323,6 +401,5 @@ def send_image_single_list(token=None,ciphertext=None):
                     files['imageFile'].close()
     return str(r.status_code)
 
-
 # host='0.0.0.0','172.19.234.74'
-app.run(debug=True,port=5000)
+app.run(debug=True,host='0.0.0.0',port=80)
